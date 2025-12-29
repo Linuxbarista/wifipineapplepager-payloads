@@ -316,7 +316,6 @@ show_menu() {
 6. Horror
 7. Gamer
 8. Movies
-
 9. Stop Broadcast
 10. Clear Pool
 0. Exit"
