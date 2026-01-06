@@ -87,9 +87,31 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 .modal-input{width:100%;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:1em;margin-bottom:16px}
 .modal-input:focus{outline:none;border-color:var(--accent)}
 .modal-buttons{display:flex;gap:10px;justify-content:flex-end}
+.login-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);display:flex;justify-content:center;align-items:center;z-index:2000}
+.login-overlay.hidden{display:none}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5)}
+.login-box img{width:64px;height:64px;border-radius:12px;margin-bottom:16px}
+.login-box h2{font-size:1.4em;margin-bottom:8px;background:linear-gradient(135deg,var(--accent),#00f5d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.login-box p{color:var(--text2);font-size:0.85em;margin-bottom:20px}
+.login-box input{width:100%;padding:12px 16px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:1em;margin-bottom:12px}
+.login-box input:focus{outline:none;border-color:var(--accent);box-shadow:var(--glow)}
+.login-box .btn{width:100%;justify-content:center}
+.login-error{color:var(--danger);font-size:0.85em;margin-bottom:12px;display:none}
+.login-error.show{display:block}
 </style>
 </head>
 <body>
+<!-- Login Overlay -->
+<div class="login-overlay" id="loginOverlay">
+<div class="login-box">
+<img src="nautilus_logo.png" alt="Nautilus" onerror="this.style.display='none'">
+<h2>Nautilus</h2>
+<p>Enter root password to continue</p>
+<div class="login-error" id="loginError">Invalid password</div>
+<input type="password" id="loginPassword" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
+<button class="btn" onclick="doLogin()">Login</button>
+</div>
+</div>
 <div class="header">
 <div class="logo">
 <img src="nautilus_logo.png" alt="Nautilus" onerror="this.style.display='none'">
@@ -138,7 +160,72 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 let payloads={},filtered={},selected=null,running=false,evtSource=null,lineCount=0;
 const $=id=>document.getElementById(id);
 
+// SHA-256 for challenge-response auth
+function sha256(s){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  function rr(n,x){return(x>>>n)|(x<<(32-n));}
+  let H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const b=new TextEncoder().encode(s);const l=b.length*8;
+  const ml=Math.ceil((l+65)/512)*64;const m=new Uint8Array(ml);
+  m.set(b);m[b.length]=0x80;const dv=new DataView(m.buffer);
+  dv.setUint32(ml-4,l,false);
+  for(let o=0;o<ml;o+=64){
+    const w=new Uint32Array(64);
+    for(let i=0;i<16;i++)w[i]=dv.getUint32(o+i*4,false);
+    for(let i=16;i<64;i++){
+      const s0=rr(7,w[i-15])^rr(18,w[i-15])^(w[i-15]>>>3);
+      const s1=rr(17,w[i-2])^rr(19,w[i-2])^(w[i-2]>>>10);
+      w[i]=(w[i-16]+s0+w[i-7]+s1)>>>0;
+    }
+    let[a,b,c,d,e,f,g,h]=H;
+    for(let i=0;i<64;i++){
+      const S1=rr(6,e)^rr(11,e)^rr(25,e);
+      const ch=(e&f)^((~e)&g);
+      const t1=(h+S1+ch+K[i]+w[i])>>>0;
+      const S0=rr(2,a)^rr(13,a)^rr(22,a);
+      const mj=(a&b)^(a&c)^(b&c);
+      const t2=(S0+mj)>>>0;
+      h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;
+    }
+    H=[(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];
+  }
+  return H.map(x=>x.toString(16).padStart(8,'0')).join('');
+}
 
+async function checkSession(){
+  try{
+    const r=await fetch('/cgi-bin/api.sh?action=check_session');
+    const d=await r.json();
+    return d.authenticated===true;
+  }catch(e){return false;}
+}
+
+async function doLogin(){
+  const pw=$('loginPassword').value;
+  if(!pw){$('loginError').classList.add('show');$('loginError').textContent='Enter password';return;}
+  $('loginError').classList.remove('show');
+  try{
+    const cr=await fetch('/cgi-bin/api.sh?action=challenge');
+    const cd=await cr.json();
+    if(!cd.challenge)throw new Error('No challenge');
+    const nonce=cd.challenge;
+    const keyHex=sha256(nonce);
+    const keyBytes=new Uint8Array(keyHex.match(/.{2}/g).map(b=>parseInt(b,16)));
+    const pwBytes=new TextEncoder().encode(pw);
+    const encrypted=new Uint8Array(pwBytes.length);
+    for(let i=0;i<pwBytes.length;i++)encrypted[i]=pwBytes[i]^keyBytes[i%keyBytes.length];
+    const b64=btoa(String.fromCharCode(...encrypted));
+    const ar=await fetch('/cgi-bin/api.sh?action=auth&nonce='+encodeURIComponent(nonce)+'&data='+encodeURIComponent(b64));
+    const ad=await ar.json();
+    if(ad.success){$('loginOverlay').classList.add('hidden');load();}
+    else{$('loginError').textContent=ad.error||'Invalid password';$('loginError').classList.add('show');}
+  }catch(e){$('loginError').textContent='Auth error: '+e.message;$('loginError').classList.add('show');}
+}
+
+async function initAuth(){
+  if(await checkSession()){$('loginOverlay').classList.add('hidden');load();}
+  else{$('loginOverlay').classList.remove('hidden');$('loginPassword').focus();}
+}
 
 async function load(){
   try{
@@ -334,7 +421,7 @@ function showPrompt(type,message,defaultVal){
   // Log prompt to console
   const line=document.createElement('div');
   line.className='line '+(type==='error'?'red':type==='alert'?'yellow':'cyan');
-  line.textContent=(type==='error'?'❌ ':type==='alert'?'⚠️ ':'⏳ ')+message+(currentPromptDefault?' (default: '+currentPromptDefault+')':'');
+  line.textContent=(type==='error'?'[X] ':type==='alert'?'[!] ':'[?] ')+message+(currentPromptDefault?' (default: '+currentPromptDefault+')':'');
   $('console').appendChild(line);
   $('console').scrollTop=$('console').scrollHeight;
 }
@@ -385,13 +472,13 @@ async function respondPrompt(confirmed){
   $('modalOverlay').classList.remove('show');
   const line=document.createElement('div');
   line.className='line '+(confirmed?'green':'yellow');
-  line.textContent='✓ '+(currentPromptType==='confirm'?(confirmed?'Yes':'No'):response);
+  line.textContent='[v] '+(currentPromptType==='confirm'?(confirmed?'Yes':'No'):response);
   $('console').appendChild(line);
   $('console').scrollTop=$('console').scrollHeight;
   await fetch('/cgi-bin/api.sh?action=respond&response='+encodeURIComponent(response)).catch(()=>{});
 }
 
-load();
+initAuth();
 </script>
 </body>
 </html>

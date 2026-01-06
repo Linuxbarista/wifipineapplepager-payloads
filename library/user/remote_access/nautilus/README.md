@@ -8,7 +8,7 @@
 
 <p align="center">
 <img src="https://img.shields.io/badge/Platform-WiFi%20Pineapple%20Pager-00d4aa?style=flat-square" />
-<img src="https://img.shields.io/badge/Version-1.1.1-blue?style=flat-square" />
+<img src="https://img.shields.io/badge/Version-1.2.0-blue?style=flat-square" />
 <img src="https://img.shields.io/badge/Author-JustSomeTrout-purple?style=flat-square" />
 </p>
 
@@ -68,18 +68,26 @@ Nautilus intercepts and displays DuckyScript prompts in the web UI:
 
 Your response is sent back to the payload — no pager interaction required!
 
-### Security (v1.1.1)
+### Security (v1.2.0)
 
 Nautilus includes multiple layers of protection against web-based attacks:
 
 | Protection | Description |
 |------------|-------------|
+| **Password Authentication** | Login required using root password with challenge-response |
+| **Session Management** | Authenticated sessions with secure cookies |
 | **Origin/Referer Validation** | Blocks cross-origin requests from malicious websites |
 | **One-Time Tokens** | CSRF tokens required for payload execution |
 | **Path Traversal Protection** | Prevents `/../` directory escape attacks |
 | **Response Injection Protection** | Blocks shell metacharacters in user input |
 | **Payload Path Validation** | Only executes files matching `/root/payloads/user/*/payload.sh` |
 | **XSS Protection** | HTML escaping on all dynamic content including category names |
+
+**Authentication Flow:**
+1. Browser requests a challenge nonce from the server
+2. Password is XOR-encrypted with SHA-256 hash of the nonce
+3. Server decrypts and verifies against root password
+4. Session cookie issued on successful authentication
 
 <p align="center">
 <img width="600" height="4" alt="" src="https://github.com/user-attachments/assets/8560a6c9-b1f1-4eed-ac94-bd9e14d36ac5" />
@@ -232,10 +240,12 @@ nautilus/
    Press B to stop
    ```
 4. Open that URL in any browser on the same network
+5. **Login**: Enter your Pager's root password when prompted
 
 ### Using the Web Interface
 
-1. **Browse**: Payloads are organized by category in the left sidebar
+1. **Login**: Enter the root password (same as SSH/serial access)
+2. **Browse**: Payloads are organized by category in the left sidebar
 2. **Search**: Type to filter payloads instantly
 3. **Select**: Click a payload to see details
 4. **Run**: Click the green **Run Payload** button

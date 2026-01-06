@@ -4,6 +4,160 @@ PAYLOAD_ROOT="/root/payloads/user"
 PID_FILE="/tmp/nautilus_payload.pid"
 OUTPUT_FILE="/tmp/nautilus_output.log"
 CACHE_FILE="/tmp/nautilus_cache.json"
+AUTH_CHALLENGE_FILE="/tmp/nautilus_auth_challenge"
+AUTH_SESSION_FILE="/tmp/nautilus_auth_session"
+SESSION_TIMEOUT=3600
+
+# --- Authentication ---
+generate_challenge() {
+    local challenge=$(head -c 32 /dev/urandom 2>/dev/null | md5sum | cut -d' ' -f1)
+    local timestamp=$(date +%s)
+    echo "${challenge}:${timestamp}" > "$AUTH_CHALLENGE_FILE"
+    echo "Content-Type: application/json"
+    echo ""
+    echo "{\"challenge\":\"$challenge\"}"
+}
+
+verify_auth() {
+    local nonce="$1"
+    local encrypted_b64="$2"
+
+    # Check challenge exists and is recent
+    if [ ! -f "$AUTH_CHALLENGE_FILE" ]; then
+        echo "Content-Type: application/json"
+        echo ""
+        echo '{"error":"No challenge issued"}'
+        exit 1
+    fi
+
+    local stored=$(cat "$AUTH_CHALLENGE_FILE")
+    local stored_challenge="${stored%%:*}"
+    local stored_time="${stored##*:}"
+    local now=$(date +%s)
+
+    # Challenge expires after 60 seconds
+    if [ $((now - stored_time)) -gt 60 ]; then
+        rm -f "$AUTH_CHALLENGE_FILE"
+        echo "Content-Type: application/json"
+        echo ""
+        echo '{"error":"Challenge expired"}'
+        exit 1
+    fi
+
+    if [ "$nonce" != "$stored_challenge" ]; then
+        echo "Content-Type: application/json"
+        echo ""
+        echo '{"error":"Invalid challenge"}'
+        exit 1
+    fi
+
+    # Consume challenge
+    rm -f "$AUTH_CHALLENGE_FILE"
+
+    # Decode base64 and XOR with key to get password
+    # Client sends: base64(XOR(password_bytes, sha256(nonce+password)[:len(password)]))
+    # We need to try decoding - since we don't know password, we use a different approach:
+    # Client sends: base64(password) XOR'd with first N bytes of sha256(nonce)
+    # This way server can decode without knowing password first
+
+    local key_hex=$(printf '%s' "$nonce" | openssl dgst -sha256 -hex 2>/dev/null | cut -d' ' -f2)
+    local encrypted_hex=$(echo "$encrypted_b64" | base64 -d 2>/dev/null | hexdump -ve '1/1 "%02x"' 2>/dev/null)
+
+    if [ -z "$encrypted_hex" ]; then
+        echo "Content-Type: application/json"
+        echo ""
+        echo '{"error":"Decode failed"}'
+        exit 1
+    fi
+
+    # XOR decrypt
+    local password=""
+    local i=0
+    local len=${#encrypted_hex}
+    while [ $i -lt $len ]; do
+        local enc_byte=$(echo "$encrypted_hex" | cut -c$((i+1))-$((i+2)))
+        local key_byte=$(echo "$key_hex" | cut -c$((i+1))-$((i+2)))
+        if [ -z "$key_byte" ]; then
+            key_byte="00"
+        fi
+        local dec_byte=$(printf '%02x' $((0x$enc_byte ^ 0x$key_byte)))
+        password="${password}$(printf "\\x${dec_byte}")"
+        i=$((i + 2))
+    done
+
+    # Verify against shadow
+    local shadow_entry=$(grep '^root:' /etc/shadow 2>/dev/null)
+    local shadow_hash=$(echo "$shadow_entry" | cut -d: -f2)
+    local salt=$(echo "$shadow_hash" | cut -d'$' -f1-3)
+
+    # Generate hash with same salt
+    local test_hash=$(openssl passwd -1 -salt "$(echo "$salt" | cut -d'$' -f3)" "$password" 2>/dev/null)
+
+    if [ "$test_hash" = "$shadow_hash" ]; then
+        # Generate session token
+        local session=$(head -c 32 /dev/urandom 2>/dev/null | md5sum | cut -d' ' -f1)
+        local session_time=$(date +%s)
+        echo "${session}:${session_time}" > "$AUTH_SESSION_FILE"
+        echo "Content-Type: application/json"
+        echo "Set-Cookie: nautilus_session=$session; Path=/; HttpOnly; SameSite=Strict"
+        echo ""
+        echo '{"success":true}'
+    else
+        echo "Content-Type: application/json"
+        echo ""
+        echo '{"error":"Invalid password"}'
+    fi
+}
+
+check_session() {
+    # Extract session cookie
+    local session=""
+    local cookies="$HTTP_COOKIE"
+    local IFS=';'
+    for cookie in $cookies; do
+        cookie=$(echo "$cookie" | sed 's/^ *//')
+        case "$cookie" in
+            nautilus_session=*)
+                session="${cookie#nautilus_session=}"
+                ;;
+        esac
+    done
+    unset IFS
+
+    if [ -z "$session" ]; then
+        return 1
+    fi
+
+    if [ ! -f "$AUTH_SESSION_FILE" ]; then
+        return 1
+    fi
+
+    local stored=$(cat "$AUTH_SESSION_FILE")
+    local stored_session="${stored%%:*}"
+    local stored_time="${stored##*:}"
+    local now=$(date +%s)
+
+    # Session expires after SESSION_TIMEOUT
+    if [ $((now - stored_time)) -gt $SESSION_TIMEOUT ]; then
+        rm -f "$AUTH_SESSION_FILE"
+        return 1
+    fi
+
+    if [ "$session" = "$stored_session" ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+require_auth() {
+    if ! check_session; then
+        echo "Content-Type: application/json"
+        echo ""
+        echo '{"error":"Authentication required","code":"AUTH_REQUIRED"}'
+        exit 1
+    fi
+}
 
 csrf_check() {
     local action="$1"
@@ -339,6 +493,8 @@ action=""
 rpath=""
 response=""
 token=""
+nonce=""
+data=""
 IFS='&'
 for param in $QUERY_STRING; do
     key="${param%%=*}"
@@ -348,22 +504,42 @@ for param in $QUERY_STRING; do
         path) rpath=$(urldecode "$val") ;;
         response) response=$(urldecode "$val") ;;
         token) token=$(urldecode "$val") ;;
+        nonce) nonce=$(urldecode "$val") ;;
+        data) data=$(urldecode "$val") ;;
     esac
 done
 unset IFS
 
+# Auth actions don't need CSRF or session check
 case "$action" in
+    challenge|auth|check_session) ;;
     run) ;;
-    *) csrf_check "$action" ;;
+    *)
+        csrf_check "$action"
+        require_auth
+        ;;
 esac
 
 case "$action" in
-    list) list_payloads ;;
-    token) generate_token ;;
-    run) run_payload "$rpath" "$token" ;;
-    stop) stop_payload ;;
-    respond) respond "$response" ;;
-    refresh) /root/payloads/user/general/nautilus/build_cache.sh; echo "Content-Type: application/json"; echo ""; echo '{"status":"refreshed"}' ;;
+    challenge) generate_challenge ;;
+    auth) verify_auth "$nonce" "$data" ;;
+    check_session)
+        if check_session; then
+            echo "Content-Type: application/json"
+            echo ""
+            echo '{"authenticated":true}'
+        else
+            echo "Content-Type: application/json"
+            echo ""
+            echo '{"authenticated":false}'
+        fi
+        ;;
+    list) require_auth; list_payloads ;;
+    token) require_auth; generate_token ;;
+    run) require_auth; run_payload "$rpath" "$token" ;;
+    stop) require_auth; stop_payload ;;
+    respond) require_auth; respond "$response" ;;
+    refresh) require_auth; /root/payloads/user/general/nautilus/build_cache.sh; echo "Content-Type: application/json"; echo ""; echo '{"status":"refreshed"}' ;;
     *) echo "Content-Type: application/json"; echo ""; echo '{"error":"Unknown action"}' ;;
 esac
 
