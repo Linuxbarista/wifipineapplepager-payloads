@@ -1,5 +1,5 @@
 #!/bin/bash
-# Title: Smart MediaTek Loader (Strict Config)
+# Title: External MediaTek Loader
 # Version: 2.0 (Fixed)
 # Author: Huntz
 
