@@ -1,6 +1,7 @@
 #!/bin/bash
 # Title: DUMPY_REVERSE_DUCKY
-# Version: 105.0 (Selected Dump Audio Feedback)
+# Version: 1.5
+#THENRGLABS
 
 # --- 1. CONFIG ---
 MOUNTPOINT="/mnt/usb"
@@ -18,7 +19,6 @@ safe_unmount() {
     umount -l "$MOUNTPOINT" 2>/dev/null
     modprobe usbhid 2>/dev/null
     
-    TITLE "SAFE TO REMOVE"
     LOG green "===================="
     LOG green "   WAIT TO REMOVE   "
     LOG green "   DEVICE NOW       "
@@ -29,12 +29,11 @@ safe_unmount() {
 trap safe_unmount EXIT SIGINT SIGTERM
 
 # --- 3. ARMED & INTERROGATION ---
-TITLE "SENTINEL ARMED"
 LOG blue "HID LOCKOUT: ACTIVE"
 rmmod usbhid 2>/dev/null || modprobe -r usbhid 2>/dev/null
 
 LOG "===================="
-LOG yellow "  INSERT USB NOW   "
+LOG yellow "  INSERT USB NOW    "
 LOG "===================="
 RINGTONE ring1
 
@@ -55,9 +54,7 @@ while true; do
         
         LOG green "NO FOWL PLAY DETECTED"
         RINGTONE health
-        
-        LOG cyan "HARDWARE DETECTED:"
-        LOG cyan "DISPLAYING CONTENTS..."
+        LOG cyan "HARDWARE DETECTED"
         sleep 2
         
         DEVICE=$(blkid | grep -o '/dev/sd[a-z][0-9]\+' | head -n 1)
@@ -67,11 +64,10 @@ while true; do
 done
 
 # --- 4. MOUNT & SILENT INDEX ---
-LOG blue 'MOUNTING HARDWARE & LISTING CONTENTS'
+LOG blue 'MOUNTING & INDEXING...'
 RINGTONE xp-
 
 mount -o ro,noatime "$DEVICE" "$MOUNTPOINT" || mount "$DEVICE" "$MOUNTPOINT"
-TITLE "SYNCING..."
 
 for i in {1..4}; do 
     ls -R "$MOUNTPOINT" > /dev/null 2>&1
@@ -93,12 +89,11 @@ while true; do
     FILE_PATH="${FILES[$INDEX]}"
     FILE_NAME=$(basename "$FILE_PATH")
     
-    TITLE "FILE $((INDEX+1)) / $COUNT"
+    LOG white "FILE $((INDEX+1)) / $COUNT"
     [ "${CHECKED[$INDEX]}" == "1" ] && LOG green "[X] TAGGED" || LOG white "[ ] UNTAGGED"
     
-    [[ "$FILE_PATH" =~ $HIGH_VALUE_REGEX ]] && LOG red "!! HIGH VALUE !!" || LOG " "
+    [[ "$FILE_PATH" =~ $HIGH_VALUE_REGEX ]] && LOG red "!! HIGH VALUE !!"
     LOG "NAME: ${FILE_NAME:0:20}"
-    LOG "--------------------"
     LOG blue "UP/DN:MOVE | B:TAG | A:DONE"
     
     KEY=$(WAIT_FOR_INPUT)
@@ -122,7 +117,6 @@ if [ "$TAG_COUNT" -gt 0 ]; then
     resp=$(CONFIRMATION_DIALOG "Dump $TAG_COUNT Selected?")
     if [ "$resp" == "$DUCKYSCRIPT_USER_CONFIRMED" ]; then
         DUMP_MODE="SELECTED"
-        # AUDIO FEEDBACK TRIGGERED
         RINGTONE leveldone
     fi
 fi
@@ -131,7 +125,6 @@ if [ "$DUMP_MODE" == "NONE" ]; then
     resp=$(CONFIRMATION_DIALOG "Dump ALL Files?")
     if [ "$resp" == "$DUCKYSCRIPT_USER_CONFIRMED" ]; then
         DUMP_MODE="ALL"
-        # AUDIO FEEDBACK TRIGGERED
         RINGTONE leveldone
     else
         exit 0
@@ -139,18 +132,22 @@ if [ "$DUMP_MODE" == "NONE" ]; then
 fi
 
 # --- 7. DUMP ---
-[ "$DUMP_MODE" == "SELECTED" ] && (for i in "${!CHECKED[@]}"; do [ "${CHECKED[$i]}" == "1" ] && echo "${FILES[$i]}" >> "$SELECTED"; done) || cp "$MANIFEST" "$SELECTED"
+if [ "$DUMP_MODE" == "SELECTED" ]; then
+    for i in "${!CHECKED[@]}"; do 
+        [ "${CHECKED[$i]}" == "1" ] && echo "${FILES[$i]}" >> "$SELECTED"
+    done
+else
+    cp "$MANIFEST" "$SELECTED"
+fi
 
 TOTAL=$(wc -l < "$SELECTED")
-CUR=0
 ARCHIVE_NAME="$(date +%H%M)_USB_LOOT.tar"
 
-TITLE "DUMPING..."
+LOG yellow "STARTING DUMP..."
 cd "$MOUNTPOINT"
-while read -r target; do
-    ((CUR++))
-    PROGRESS_BAR "$(( CUR * 100 / TOTAL ))" "Copying..."
-    tar -rf "$LOOT_DIR/$ARCHIVE_NAME" "${target#$MOUNTPOINT/}" 2>/dev/null
-done < "$SELECTED"
+# Faster archiving: use -T to read the list at once
+sed -i "s|^$MOUNTPOINT/||" "$SELECTED"
+tar -cf "$LOOT_DIR/$ARCHIVE_NAME" -T "$SELECTED" 2>/dev/null
 
+LOG green "DUMP COMPLETE"
 exit 0
