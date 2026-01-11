@@ -37,6 +37,10 @@ function createModal(id, title, contentHTML, showRefresh = false) {
         .btn-unapply { background: #ff5252; color: #fff; width: auto; padding: 6px 14px; font-size: 13px; min-width: 80px; margin-top: 0 !important; }
         .btn-color-reset { background: #555; color: #fff; width: auto; padding: 6px 12px; font-size: 12px; margin-top: 0; }
         .modal-reset { background: #444; color: white; width: 100%; }
+        .btn-io { background: #444; color: #fff; padding: 8px; border-radius: 4px; font-size: 12px; cursor: pointer; border: 1px solid #555; flex: 1; text-align: center; }
+        .btn-io:hover { background: #555; }
+        .btn-tab { background: #333; color: #aaa; padding: 10px; border-radius: 4px; font-size: 13px; cursor: pointer; border: none; flex: 1; text-align: center; font-weight: 600; }
+        .btn-tab.active { background: #007acc; color: #fff; }
         input[type="color"] { -webkit-appearance: none; width: 60px; height: 38px; border: none; padding: 0; background: none; cursor: pointer; }
         input[type="color"]::-webkit-color-swatch { border: 1px solid #333; border-radius: 6px; }
     `;
@@ -97,7 +101,7 @@ async function saveFullConfig(newData) {
     return await sendServerRequest("setconfig", JSON.stringify(merged), false, true);
 }
 
-function applyTheme(value, isColorOnly = false) {
+function applyBackgroundTheme(value, isColorOnly = false) {
     if (!value) return;
     let styleTag = document.getElementById("dynamic-skinner-css");
     if (!styleTag) {
@@ -110,6 +114,32 @@ function applyTheme(value, isColorOnly = false) {
         ? `background-image: url("${value}") !important; background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; background-attachment: fixed !important;` 
         : `background-color: ${value} !important; background-image: none !important;`;
     styleTag.textContent = `body, #sidebarnav, #sidebarbutton, #sidebarbutton.toggle { ${cssRule} }`;
+}
+
+function applyPagerTheme(config) {
+    const fillEl = document.getElementById("pager-custom-fill");
+    const borderEl = document.getElementById("pager-custom-border");
+    const imageEl = document.getElementById("pager-custom-image");
+    
+    if (!fillEl || !borderEl || !imageEl) return;
+
+    const defaultColor = "#fff200";
+    const color = config.pagerHex || defaultColor;
+    const activeSkinName = config.appliedPagerSkinName;
+    const skins = config.savedPagerSkins || [];
+    const activeSkin = skins.find(s => s.name === activeSkinName);
+
+    if (activeSkin) {
+        fillEl.style.display = "none";
+        borderEl.style.display = "none";
+        imageEl.style.display = "block";
+        imageEl.src = activeSkin.url;
+    } else {
+        fillEl.style.display = "block";
+        borderEl.style.display = "block";
+        imageEl.style.display = "none";
+        fillEl.querySelectorAll("path, rect, circle, polygon, ellipse").forEach(el => el.style.fill = color);
+    }
 }
 
 async function updateSystemData() {
@@ -169,69 +199,186 @@ function initLootUI() {
 }
 
 function initPagerSkinner() {
-    const defaultHex = "#303030";
+    const defaultBgHex = "#303030";
+    const defaultPagerHex = "#fff200";
     const MAX_FILE_SIZE = 500 * 1024;
     const contentHTML = `
-        <h3 style="margin: 0 0 8px 0; font-size:14px; color:#ddd;">Background Color</h3>
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;"><input type="color" id="backgroundColorPicker" value="${defaultHex}"><button id="btnResetDefault" class="btn-color-reset">Reset to Default</button></div>
-        <hr class="modal-hr"><h3 style="margin: 0 0 8px 0; font-size:14px; color:#ddd;">Upload Image <span style="font-size:11px; color:#888;">(Max 500KB)</span></h3>
-        <input type="text" id="imgName" placeholder="Name" style="width:100%; box-sizing:border-box; padding:8px; border-radius:4px; border:1px solid #333; background:#2b2b2b; color:#fff; margin-bottom:10px;">
-        <input type="file" id="imgFile" accept="image/*" style="width:100%; color:#aaa; font-size:12px; margin-bottom:10px;">
-        <button id="btnUpload" class="modal-reset">Add to Library</button>
-        <h3 style="margin: 15px 0 8px 0; font-size:14px; color:#ddd;">Background Library</h3><div id="libraryList" class="modal-links"></div>`;
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px;">
+            <div id="btnExport" class="btn-io">Export Theme</div>
+            <div id="btnImport" class="btn-io">Import Theme</div>
+            <input type="file" id="importFile" style="display:none;" accept=".json">
+        </div>
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+            <div id="tabBackground" class="btn-tab active">Background</div>
+            <div id="tabPager" class="btn-tab">Pager</div>
+        </div>
+        <hr class="modal-hr">
+        
+        <div id="sectionBackground">
+            <h3 style="margin: 0 0 8px 0; font-size:14px; color:#ddd;">Background Color</h3>
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                <input type="color" id="bgColorPicker" value="${defaultBgHex}">
+                <button id="btnResetBg" class="btn-color-reset">Reset to Default</button>
+            </div>
+            <hr class="modal-hr">
+            <h3 style="margin: 0 0 8px 0; font-size:14px; color:#ddd;">Upload Background Image <span style="font-size:11px; color:#888;">(Max 500KB)</span></h3>
+            <input type="text" id="bgImgName" placeholder="Name" style="width:100%; box-sizing:border-box; padding:8px; border-radius:4px; border:1px solid #333; background:#2b2b2b; color:#fff; margin-bottom:10px;">
+            <input type="file" id="bgImgFile" accept="image/*" style="width:100%; color:#aaa; font-size:12px; margin-bottom:10px;">
+            <button id="btnUploadBg" class="modal-reset">Add to Library</button>
+            <h3 style="margin: 15px 0 8px 0; font-size:14px; color:#ddd;">Background Library</h3>
+            <div id="bgLibraryList" class="modal-links"></div>
+        </div>
 
-    const renderLibrary = (config, overlay) => {
-        const listContainer = overlay.querySelector("#libraryList");
-        const backgrounds = config.savedBackgrounds || [];
-        const currentActiveName = config.appliedBackgroundName || "";
-        listContainer.innerHTML = backgrounds.length ? "" : "No images saved.";
-        backgrounds.forEach((bg, index) => {
-            const isApplied = (currentActiveName === bg.name);
-            const div = document.createElement("div");
-            div.className = "lib-item";
-            div.innerHTML = `<i class="material-icons">image</i><span style="flex:1;">${bg.name}</span><button class="${isApplied ? 'btn-unapply' : 'btn-apply'}">${isApplied ? 'Unapply' : 'Apply'}</button><i class="material-icons delete-btn" style="color:#ff5252;">delete</i>`;
-            div.querySelector(isApplied ? ".btn-unapply" : ".btn-apply").onclick = async (e) => {
-                e.stopPropagation();
-                if (isApplied) { await saveFullConfig({ appliedBackgroundName: "" }); applyTheme(config.backgroundHex || defaultHex, true); }
-                else { await saveFullConfig({ appliedBackgroundName: bg.name }); applyTheme(bg.url); }
-                renderLibrary(await getFullConfig(), overlay);
-            };
-            div.querySelector(".delete-btn").onclick = async (e) => {
-                e.stopPropagation();
-                if(!confirm(`Delete "${bg.name}"?`)) return;
-                backgrounds.splice(index, 1);
-                const update = { savedBackgrounds: backgrounds };
-                if (currentActiveName === bg.name) { update.appliedBackgroundName = ""; applyTheme(config.backgroundHex || defaultHex, true); }
-                await saveFullConfig(update);
-                renderLibrary(await getFullConfig(), overlay);
-            };
-            listContainer.appendChild(div);
-        });
+        <div id="sectionPager" style="display:none;">
+            <h3 style="margin: 0 0 8px 0; font-size:14px; color:#ddd;">Pager Color</h3>
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                <input type="color" id="pagerColorPicker" value="${defaultPagerHex}">
+                <button id="btnResetPager" class="btn-color-reset">Reset to Default</button>
+            </div>
+            <hr class="modal-hr">
+            <h3 style="margin: 0 0 8px 0; font-size:14px; color:#ddd;">Upload Pager Skin <span style="font-size:11px; color:#888;">(Max 500KB)</span></h3>
+            <input type="text" id="pagerImgName" placeholder="Name" style="width:100%; box-sizing:border-box; padding:8px; border-radius:4px; border:1px solid #333; background:#2b2b2b; color:#fff; margin-bottom:10px;">
+            <input type="file" id="pagerImgFile" accept="image/*" style="width:100%; color:#aaa; font-size:12px; margin-bottom:10px;">
+            <div style="display:flex; gap:10px;">
+                <button id="btnUploadPager" class="modal-reset">Add to Library</button>
+                <button id="btnDownloadTemplate" class="modal-reset" style="background:#555;">Download Template</button>
+            </div>
+            <h3 style="margin: 15px 0 8px 0; font-size:14px; color:#ddd;">Pager Skin Library</h3>
+            <div id="pagerLibraryList" class="modal-links"></div>
+        </div>
+    `;
+
+    const renderLibraries = (config, overlay) => {
+        const renderList = (listId, items, activeName, type) => {
+            const listContainer = overlay.querySelector(listId);
+            listContainer.innerHTML = items.length ? "" : "No items saved.";
+            items.forEach((item, index) => {
+                const isApplied = (activeName === item.name);
+                const div = document.createElement("div");
+                div.className = "lib-item";
+                div.innerHTML = `<i class="material-icons">image</i><span style="flex:1;">${item.name}</span><button class="${isApplied ? 'btn-unapply' : 'btn-apply'}">${isApplied ? 'Unapply' : 'Apply'}</button><i class="material-icons delete-btn" style="color:#ff5252;">delete</i>`;
+                
+                div.querySelector(isApplied ? ".btn-unapply" : ".btn-apply").onclick = async (e) => {
+                    e.stopPropagation();
+                    const updateData = {};
+                    const keyName = type === "bg" ? "appliedBackgroundName" : "appliedPagerSkinName";
+                    updateData[keyName] = isApplied ? "" : item.name;
+                    await saveFullConfig(updateData);
+                    await loadConfigAndApply();
+                    renderLibraries(await getFullConfig(), overlay);
+                };
+
+                div.querySelector(".delete-btn").onclick = async (e) => {
+                    e.stopPropagation();
+                    if(!confirm(`Delete "${item.name}"?`)) return;
+                    items.splice(index, 1);
+                    const updateData = {};
+                    updateData[type === "bg" ? "savedBackgrounds" : "savedPagerSkins"] = items;
+                    if (activeName === item.name) {
+                        updateData[type === "bg" ? "appliedBackgroundName" : "appliedPagerSkinName"] = "";
+                    }
+                    await saveFullConfig(updateData);
+                    await loadConfigAndApply();
+                    renderLibraries(await getFullConfig(), overlay);
+                };
+                listContainer.appendChild(div);
+            });
+        };
+
+        renderList("#bgLibraryList", config.savedBackgrounds || [], config.appliedBackgroundName || "", "bg");
+        renderList("#pagerLibraryList", config.savedPagerSkins || [], config.appliedPagerSkinName || "", "pager");
     };
 
     createModal("pagerSkinnerModal", "Pager Skinner Settings", contentHTML);
     const overlay = document.getElementById("pagerSkinnerModal");
-    const picker = overlay.querySelector("#backgroundColorPicker");
+    const bgPicker = overlay.querySelector("#bgColorPicker");
+    const pagerPicker = overlay.querySelector("#pagerColorPicker");
+    const tabBg = overlay.querySelector("#tabBackground");
+    const tabPager = overlay.querySelector("#tabPager");
+    const secBg = overlay.querySelector("#sectionBackground");
+    const secPager = overlay.querySelector("#sectionPager");
 
-    overlay.querySelector("#btnUpload").onclick = async () => {
-        const n = overlay.querySelector("#imgName"), f = overlay.querySelector("#imgFile"), file = f.files[0];
+    tabBg.onclick = () => { tabBg.classList.add("active"); tabPager.classList.remove("active"); secBg.style.display = "block"; secPager.style.display = "none"; };
+    tabPager.onclick = () => { tabPager.classList.add("active"); tabBg.classList.remove("active"); secPager.style.display = "block"; secBg.style.display = "none"; };
+
+    overlay.querySelector("#btnDownloadTemplate").onclick = async () => {
+        const r = await sendServerRequest("getimage", "pager-template.png", false);
+        if (r && r.ok) {
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "pager-template.png";
+            a.click();
+            URL.revokeObjectURL(url);
+        } else {
+            alert("Could not download template.");
+        }
+    };
+
+    overlay.querySelector("#btnExport").onclick = async () => {
+        const config = await getFullConfig();
+        const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "skinner_config.json";
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const importInput = overlay.querySelector("#importFile");
+    overlay.querySelector("#btnImport").onclick = () => importInput.click();
+    importInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            try {
+                const importedConfig = JSON.parse(ev.target.result);
+                await saveFullConfig(importedConfig);
+                await loadConfigAndApply();
+                const newConfig = await getFullConfig();
+                renderLibraries(newConfig, overlay);
+                if (newConfig.backgroundHex) bgPicker.value = newConfig.backgroundHex;
+                if (newConfig.pagerHex) pagerPicker.value = newConfig.pagerHex;
+                alert("Theme imported successfully!");
+            } catch (err) { alert("Failed to import. Invalid JSON file."); }
+        };
+        reader.readAsText(file);
+    };
+
+    const handleUpload = async (nameInputId, fileInputId, configKey) => {
+        const n = overlay.querySelector(nameInputId), f = overlay.querySelector(fileInputId), file = f.files[0];
         if (!n.value || !file) return alert("Missing name or file.");
         if (file.size > MAX_FILE_SIZE) { alert(`File too large (${(file.size / 1024).toFixed(1)}KB). Please keep images under 500KB.`); f.value = ""; return; }
         const r = new FileReader();
         r.onload = async (e) => {
             const config = await getFullConfig();
-            const bgs = config.savedBackgrounds || [];
-            bgs.push({ name: n.value, url: e.target.result });
-            await saveFullConfig({ savedBackgrounds: bgs });
+            const items = config[configKey] || [];
+            items.push({ name: n.value, url: e.target.result });
+            const updateData = {};
+            updateData[configKey] = items;
+            await saveFullConfig(updateData);
             n.value = ""; f.value = "";
-            renderLibrary(await getFullConfig(), overlay);
+            renderLibraries(await getFullConfig(), overlay);
         };
         r.readAsDataURL(file);
     };
 
-    picker.oninput = (e) => applyTheme(e.target.value, true);
-    picker.onchange = async (e) => { await saveFullConfig({ backgroundHex: e.target.value, appliedBackgroundName: "" }); renderLibrary(await getFullConfig(), overlay); };
-    overlay.querySelector("#btnResetDefault").onclick = async () => { await saveFullConfig({ backgroundHex: defaultHex, appliedBackgroundName: "" }); applyTheme(defaultHex, true); picker.value = defaultHex; renderLibrary(await getFullConfig(), overlay); };
+    overlay.querySelector("#btnUploadBg").onclick = () => handleUpload("#bgImgName", "#bgImgFile", "savedBackgrounds");
+    overlay.querySelector("#btnUploadPager").onclick = () => handleUpload("#pagerImgName", "#pagerImgFile", "savedPagerSkins");
+
+    bgPicker.oninput = (e) => applyBackgroundTheme(e.target.value, true);
+    bgPicker.onchange = async (e) => { await saveFullConfig({ backgroundHex: e.target.value, appliedBackgroundName: "" }); renderLibraries(await getFullConfig(), overlay); };
+    overlay.querySelector("#btnResetBg").onclick = async () => { await saveFullConfig({ backgroundHex: defaultBgHex, appliedBackgroundName: "" }); applyBackgroundTheme(defaultBgHex, true); bgPicker.value = defaultBgHex; renderLibraries(await getFullConfig(), overlay); };
+
+    pagerPicker.oninput = (e) => {
+        const fillEl = document.getElementById("pager-custom-fill");
+        if(fillEl) fillEl.querySelectorAll("path, rect, circle, polygon, ellipse").forEach(el => el.style.fill = e.target.value);
+    };
+    pagerPicker.onchange = async (e) => { await saveFullConfig({ pagerHex: e.target.value, appliedPagerSkinName: "" }); await loadConfigAndApply(); renderLibraries(await getFullConfig(), overlay); };
+    overlay.querySelector("#btnResetPager").onclick = async () => { await saveFullConfig({ pagerHex: defaultPagerHex, appliedPagerSkinName: "" }); await loadConfigAndApply(); pagerPicker.value = defaultPagerHex; renderLibraries(await getFullConfig(), overlay); };
 
     const ul = document.querySelector("#sidebarnav ul");
     if (!ul || document.getElementById("pagerSkinnerBtn")) return;
@@ -242,25 +389,125 @@ function initPagerSkinner() {
         e.preventDefault(); 
         showModal("pagerSkinnerModal"); 
         const config = await getFullConfig(); 
-        if (config.backgroundHex) picker.value = config.backgroundHex;
-        renderLibrary(config, overlay); 
+        if (config.backgroundHex) bgPicker.value = config.backgroundHex;
+        if (config.pagerHex) pagerPicker.value = config.pagerHex;
+        renderLibraries(config, overlay); 
     };
 }
 
 async function loadConfigAndApply() {
     const config = await getFullConfig();
+    
     if (config.appliedBackgroundName) {
         const activeObj = (config.savedBackgrounds || []).find(b => b.name === config.appliedBackgroundName);
-        if (activeObj) { applyTheme(activeObj.url); return; }
+        if (activeObj) applyBackgroundTheme(activeObj.url);
+    } else {
+        applyBackgroundTheme(config.backgroundHex || "#303030", true);
     }
-    applyTheme(config.backgroundHex || "#303030", true);
+    
+    const sidebar = document.getElementById("sidebarnav");
+    const isSidebarVisible = sidebar && sidebar.offsetParent !== null && window.getComputedStyle(sidebar).display !== 'none';
+    
+    if (isSidebarVisible) {
+        applyPagerTheme(config);
+    }
+}
+
+async function initPagerSVG() {
+    const t = document.getElementById("pager_ui");
+    if (!t) return;
+
+    const [rSvg, rBorder] = await Promise.all([
+        sendServerRequest("getimage", "pager-fill.svg", false),
+        sendServerRequest("getimage", "pager-border.png", false)
+    ]);
+
+    if (rSvg && rSvg.ok && rBorder && rBorder.ok) {
+        const svgContent = await rSvg.text();
+        const borderBlob = await rBorder.blob();
+        const borderUrl = URL.createObjectURL(borderBlob);
+
+        const w = document.createElement("div");
+        w.style.cssText = "position:relative;display:inline-block;";
+        t.parentNode.insertBefore(w, t);
+        
+        const svgDiv = document.createElement("div");
+        svgDiv.id = "pager-custom-fill";
+        svgDiv.style.cssText = "position:absolute;top:0;left:0;z-index:0;width:100%;height:100%;";
+        svgDiv.innerHTML = svgContent;
+        w.appendChild(svgDiv);
+
+        const customImg = document.createElement("img");
+        customImg.id = "pager-custom-image";
+        customImg.style.cssText = "position:absolute;top:0;left:0;z-index:0;width:100%;height:100%;display:none;";
+        w.appendChild(customImg);
+
+        const borderImg = document.createElement("img");
+        borderImg.id = "pager-custom-border";
+        borderImg.src = borderUrl;
+        borderImg.style.cssText = "position:absolute;top:0;left:0;z-index:1;width:100%;height:100%;pointer-events:none;"; 
+        w.appendChild(borderImg);
+
+        w.appendChild(t);
+        t.style.position = "relative";
+        t.style.zIndex = "2";
+
+        t.querySelectorAll("img").forEach(i => {
+            if (i.src.includes("virtual_pager")) i.remove();
+        });
+
+        const config = await getFullConfig();
+        const sidebar = document.getElementById("sidebarnav");
+        const isSidebarVisible = sidebar && sidebar.offsetParent !== null && window.getComputedStyle(sidebar).display !== 'none';
+        
+        if (isSidebarVisible) {
+            applyPagerTheme(config);
+        } else {
+             ["pager-custom-fill", "pager-custom-border", "pager-custom-image"].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = "none";
+            });
+        }
+    }
 }
 
 function startInitialization() {
-    const init = () => { initLootUI(); initPagerSkinner(); initSystemInfo(); fetch("/api/api_ping").then(res => res.json()).then(data => { if (data.serverid) localStorage.setItem("serverid", data.serverid); }).catch(()=>{}); };
-    if (document.getElementById("sidebarnav")) init();
-    else { const observer = new MutationObserver(() => { if (document.getElementById("sidebarnav")) { init(); observer.disconnect(); } }); observer.observe(document.documentElement, { childList: true, subtree: true }); }
+    let initialized = false;
+    let lastSidebarState = false;
+
+    loadConfigAndApply();
+
+    const checkState = async () => {
+        const sidebar = document.getElementById("sidebarnav");
+        const isSidebarVisible = sidebar && sidebar.offsetParent !== null && window.getComputedStyle(sidebar).display !== 'none';
+
+        if (isSidebarVisible && !initialized) {
+            initLootUI();
+            initPagerSkinner();
+            initSystemInfo();
+            initPagerSVG();
+            fetch("/api/api_ping").then(res => res.json()).then(data => { if (data.serverid) localStorage.setItem("serverid", data.serverid); }).catch(()=>{});
+            initialized = true;
+        }
+
+        if (isSidebarVisible !== lastSidebarState) {
+            lastSidebarState = isSidebarVisible;
+            if (isSidebarVisible) {
+                const config = await getFullConfig();
+                applyPagerTheme(config);
+            } else {
+                ["pager-custom-fill", "pager-custom-border", "pager-custom-image"].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.style.display = "none";
+                });
+            }
+        }
+    };
+
+    const observer = new MutationObserver(checkState);
+    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
+    
+    checkState();
 }
 
-loadConfigAndApply();
 startInitialization();

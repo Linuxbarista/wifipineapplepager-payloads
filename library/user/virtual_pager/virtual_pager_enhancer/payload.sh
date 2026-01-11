@@ -2,21 +2,24 @@
 # Title: Virtual Pager Enhancer
 # Author: Rektile404
 # Description: Tool used to add functionality to the virtual pager
-# Version: 2.1
+# Version: 2.2
 
 CONFIG_PATH="./config"
 CONFIG_FILE="config.json"
 PAYLOAD="./payload.js"
 API_FILE="./api.sh"
+IMAGE_OVERWRITE_DIR="./img_overwrite"
 
 VIRTUAL_PAGER_DIR="/pineapple/ui"
 BACKUP_VIRTUAL_PAGER_DIR="/rom/pineapple/ui"
+IMG_DIR="images"
 INDEX_FILE="index.html"
+
 
 VIRTUAL_PAGER_ENHANCER_TAG="<!-- Virtual Pager Enhancer BEGIN -->"
 VIRTUAL_PAGER_ENHANCER_END="<!-- Virtual Pager Enhancer END -->"
 
-CURRENT_VERSION="2.1"
+CURRENT_VERSION="2.2"
 SERVER_PORT=4040
 SERVICE_FILE="/etc/init.d/virtual_pager_enhancer_server"
 
@@ -71,6 +74,10 @@ inject_payload() {
 
     LOG "Injecting payload..."
 
+    cp -rf "$IMAGE_OVERWRITE_DIR/." "$VIRTUAL_PAGER_DIR/$IMG_DIR/" 2>/dev/null
+
+    sed -i "s|^PAYLOAD_WORKING_DIR=.*|PAYLOAD_WORKING_DIR=\"$SCRIPT_ABS_PATH\"|" "$API_FILE"
+
     local tmp
     tmp=$(mktemp)
 
@@ -113,6 +120,8 @@ EOF
 
 remove_payload() {
     LOG "Removing payload..."
+
+    cp -rf "$BACKUP_VIRTUAL_PAGER_DIR/$IMG_DIR/." "$VIRTUAL_PAGER_DIR/$IMG_DIR/" 2>/dev/null
 
     local tmp
     tmp=$(mktemp)
@@ -169,7 +178,7 @@ LOG "=========================="
 
 LOG "This script acts as a toggle to enable or disable Virtual Pager Enhancer."
 LOG "The changes that are made are persistant, even after reboot."
-LOG "Once you have enabled or disabled, feel free to stop the payload."
+LOG "Once you have enabled or disabled, feel free to stop the payload and HARD refresh your browser."
 
 
 

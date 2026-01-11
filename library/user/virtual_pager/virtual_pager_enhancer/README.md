@@ -9,7 +9,7 @@ Virtual Pager Enhancer is a lightweight client-side enhancement for the Virtual 
 When running the payload, you can press the **“A”** button to enable or disable the Virtual Pager Enhancer.
 After enabling or disabling the enhancer, press any other button to exit the script.
 
-Once finished, refresh the Virtual Pager web page. If everything worked correctly, you should see new menu items added to the navigation bar.
+Once finished, HARD refresh the Virtual Pager web page. If everything worked correctly, you should see new menu items added to the navigation bar.
 
 ## Functionality
 
@@ -23,6 +23,8 @@ Once finished, refresh the Virtual Pager web page. If everything worked correctl
 
   * Changing background colors
   * Setting custom background images
+  * Set pager color
+  * Set custom pager image
 
 * 💻 **System Info**
   Displays key system metrics, including:
