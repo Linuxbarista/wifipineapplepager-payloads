@@ -92,7 +92,7 @@ Press **[A]** to proceed with the replacement, or **[B]** to cancel and use beac
 ```bash
 opkg update
 opkg remove wpad-basic-mbedtls
-opkg install wpad-openssl
+opkg install wpad-openssl wpa-cli
 ```
 
 > **Note**: Without `wpad-openssl`, the scanner runs in **Beacon-Only Mode** - it will detect Passpoint APs and decode RCOIs from beacons, but won't query ANQP data (NAI realms, domains, venue info).

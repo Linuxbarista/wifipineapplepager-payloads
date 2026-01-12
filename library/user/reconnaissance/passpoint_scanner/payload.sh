@@ -107,8 +107,12 @@ trap cleanup SIGINT SIGTERM
 
 ANQP_AVAILABLE=false
 
-# Check if wpa_supplicant with HS2.0 support is installed
+# Check if wpa_supplicant with HS2.0 support AND wpa-cli are installed
 check_wpa_supplicant() {
+    # First check for wpa-cli (required for ANQP queries)
+    if ! opkg list-installed 2>/dev/null | grep -q "^wpa-cli "; then
+        return 1
+    fi
     # Check for wpad-openssl (full hostapd+wpa_supplicant with HS2.0)
     if opkg list-installed 2>/dev/null | grep -q "^wpad-openssl "; then
         return 0
@@ -208,8 +212,11 @@ install_wpa_supplicant() {
     # Install wpad-openssl (full package with hostapd+wpa_supplicant+HS2.0)
     install_output=$(opkg install wpad-openssl 2>&1)
     if [ $? -eq 0 ]; then
+        # Also install wpa-cli (separate package needed for ANQP queries)
+        LOG "Installing wpa-cli..."
+        opkg install wpa-cli >/dev/null 2>&1
         LOG ""
-        LOG "SUCCESS! wpad-openssl installed."
+        LOG "SUCCESS! Packages installed."
         LOG "ANQP queries now available."
         LOG ""
         sleep 2
@@ -225,7 +232,7 @@ install_wpa_supplicant() {
     LOG ""
     LOG "Try manually:"
     LOG "  opkg remove wpad-basic-mbedtls"
-    LOG "  opkg install wpad-openssl"
+    LOG "  opkg install wpad-openssl wpa-cli"
     LOG ""
     LOG "[A] Retry  [B] Continue without"
     local btn=$(WAIT_FOR_INPUT)
