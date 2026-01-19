@@ -186,7 +186,7 @@ Authenticate() {
           \"embeds\": [
             {
               \"title\": \":pager:   **PageCord Session Connected!**   :pager:\",
-              \"description\": \"-# ---- Control Your WiFi Pineapple Pager Through Discord! ---- \n\n*You can use regular Linux and Duckyscript commands. Large outputs are split into 2000 character chunks to avoid Discord limits. Only the authenticated userID can interact with this session* \n\n **Additional Commands** \n- **options**  - Show the options list\n- **pause**    - Pause this session (re-authenticate to resume)\n- **background**  - Restart the payload in the background\n- **sysinfo**    - Show basic system information and public IP address\n- **close**    - Close this session permanently\n- **download**   - Send a file to Discord [download path/to/file.txt]\n- **upload**     - Upload file to Pager [attach to 'upload' command] \n\nCurrent Directory :\`$cwd\`\",
+              \"description\": \"-# ---- Control Your WiFi Pineapple Pager Through Discord! ---- \n\n*You can use regular Linux and Duckyscript commands. Large outputs are split into 2000 character chunks to avoid Discord limits. Only the authenticated userID can interact with this session* \n\n **Additional Commands** \n- **options**  - Show the additional commands list\n- **pause**    - Pause this session (re-authenticate to resume)\n- **background**  - Restart the payload in the background\n- **close**    - Close this session permanently\n- **sysinfo**    - Show basic system information and public IP address\n- **download**   - Send a file to Discord [download path/to/file.txt]\n- **upload**     - Upload file to Pager [attach to 'upload' command]\n\nCurrent Directory :\`$cwd >\`\",
               \"color\": 65280
             }
           ]
@@ -210,7 +210,7 @@ Option_List() {
           \"embeds\": [
             {
               \"title\": \":link: **Options List** :link:\",
-              \"description\": \"- **options**  - Show the options list\n- **pause**    - Pause this session (re-authenticate to resume)\n- **background**  - Restart the payload in the background\n- **sysinfo**    - Show basic system information and public IP address\n- **close**    - Close this session permanently\n- **download**   - Send a file to Discord [download path/to/file.txt]\n- **upload**     - Upload file to Pager [attach to 'upload' command]\n*You can also use regular Linux and Duckyscript commands. Large outputs are split into 2000 character chunks to avoid Discord limits. Only the authenticated userID can interact with this session* \",
+              \"description\": \"- **options**  - Show the additional commands list\n- **pause**    - Pause this session (re-authenticate to resume)\n- **background**  - Restart the payload in the background\n- **close**    - Close this session permanently\n- **sysinfo**    - Show basic system information and public IP address\n- **download**   - Send a file to Discord [download path/to/file.txt]\n- **upload**     - Upload file to Pager [attach to 'upload' command]\n\n*You can also use regular Linux and Duckyscript commands. Large outputs are split into 2000 character chunks to avoid Discord limits. Only the authenticated userID can interact with this session* \",
               \"color\": 16777215
             }
           ]
@@ -430,7 +430,7 @@ execute_command() {
 	          \"embeds\": [
 	            {
 	              \"title\": \":white_check_mark:   **Command Executed**   :white_check_mark:\",
-	              \"description\": \"Current Directory :\`$cwd\`\",
+	              \"description\": \"Current Directory :\`$cwd >\`\",
 	              \"color\": 65280
 	            }
 	          ]
