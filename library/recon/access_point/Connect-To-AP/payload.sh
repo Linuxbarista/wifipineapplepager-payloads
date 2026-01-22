@@ -21,12 +21,6 @@ if [ -n "$CURRENT_SSID" ]; then
     LOG "Encryption: $CURRENT_ENC"
     CURRENT_BSSID=$(uci get wireless.wlan0cli.bssid 2>/dev/null)
     LOG "BSSID: $CURRENT_BSSID"
-    ping -c 1 1.1.1.1 > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        LOG green "Internet reachable\n"
-    else
-        LOG yellow "Internet NOT reachable\n"
-    fi
 else
     LOG "No current configuration found."
 fi
@@ -256,7 +250,6 @@ if WIFI_CONNECT wlan0cli "$TARGET_SSID" "$NEW_ENC" "$WIFI_PASSWORD" "$_RECON_SEL
         fi
         
     else
-        STOP_SPINNER $spinner_id
         ALERT "Connected to $TARGET_SSID (No IP)"
         LOG yellow "Warning: No IP address assigned"
     fi
