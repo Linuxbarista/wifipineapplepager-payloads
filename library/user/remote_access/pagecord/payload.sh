@@ -114,9 +114,12 @@ if [[ ${#token} -lt 70 ]]; then
         ;;
 
     $DUCKYSCRIPT_USER_DENIED)
-        LOG red "Please edit $ENV_FILE"
+	    LOG ""
+        LOG red "PLEASE EDIT : $ENV_FILE"
+		LOG ""
         LOG red "Add your Discord bot credentials before running again."
-        exit 1
+	    ALERT "PLEASE EDIT : $ENV_FILE \n\nAdd your Discord bot credentials before running again."
+        exit 0
         ;;
     *)
         LOG "Unknown response: $resp"
@@ -186,7 +189,7 @@ Authenticate() {
           \"embeds\": [
             {
               \"title\": \":pager:   **PageCord Session Connected!**   :pager:\",
-              \"description\": \"-# ---- Control Your WiFi Pineapple Pager Through Discord! ---- \n\n*You can use regular Linux and Duckyscript commands. Large outputs are split into 2000 character chunks to avoid Discord limits. Only the authenticated userID can interact with this session* \n\n **Additional Commands** \n- **options**  - Show the additional commands list\n- **pause**    - Pause this session (re-authenticate to resume)\n- **background**  - Restart the payload in the background\n- **close**    - Close this session permanently\n- **sysinfo**    - Show basic system information and public IP address\n- **download**   - Send a file to Discord [download path/to/file.txt]\n- **upload**     - Upload file to Pager [attach to 'upload' command]\n\nCurrent Directory :\`$cwd >\`\",
+              \"description\": \"-# ---- Control Your WiFi Pineapple Pager Through Discord! ---- \n\n*You can use regular Linux and Duckyscript commands. Large outputs are split into 2000 character chunks to avoid Discord limits. Only the authenticated userID can interact with this session* \n\n **Additional Commands** \n- **options**  - Show the additional commands list\n- **pause**    - Pause this session (re-authenticate to resume)\n- **background**  - Restart the payload in the background\n- **close**    - Close this session permanently\n- **sysinfo**    - Show basic system information and public IP address\n- **download**   - Send a file to Discord [download path/to/file.txt]\n- **upload**     - Upload file to Pager [attach to 'upload' command]\n- **readme**     - Show a readme file [readme path/to/README.md]\n\nCurrent Directory :\`$cwd >\`\",
               \"color\": 65280
             }
           ]
@@ -210,7 +213,7 @@ Option_List() {
           \"embeds\": [
             {
               \"title\": \":link: **Options List** :link:\",
-              \"description\": \"- **options**  - Show the additional commands list\n- **pause**    - Pause this session (re-authenticate to resume)\n- **background**  - Restart the payload in the background\n- **close**    - Close this session permanently\n- **sysinfo**    - Show basic system information and public IP address\n- **download**   - Send a file to Discord [download path/to/file.txt]\n- **upload**     - Upload file to Pager [attach to 'upload' command]\n\n*You can also use regular Linux and Duckyscript commands. Large outputs are split into 2000 character chunks to avoid Discord limits. Only the authenticated userID can interact with this session* \",
+              \"description\": \"- **options**  - Show the additional commands list\n- **pause**    - Pause this session (re-authenticate to resume)\n- **background**  - Restart the payload in the background\n- **close**    - Close this session permanently\n- **sysinfo**    - Show basic system information and public IP address\n- **download**   - Send a file to Discord [download path/to/file.txt]\n- **upload**     - Upload file to Pager [attach to 'upload' command]\n- **readme**     - Show a readme file [readme path/to/README.md]\n\n*You can also use regular Linux and Duckyscript commands. Large outputs are split into 2000 character chunks to avoid Discord limits. Only the authenticated userID can interact with this session* \",
               \"color\": 16777215
             }
           ]
@@ -311,7 +314,8 @@ execute_command() {
     recent_message=$(curl -s -H "Authorization: Bot $token" "https://discord.com/api/v10/channels/$chan/messages?limit=1")
     current_user_id=$(echo "$recent_message" | grep -o '"author":{"id":"[^"]*' | grep -o '[^"]*$')
     if [ "$authenticated" -eq 1 ] && [ "$current_user_id" = "$auth_user_id" ]; then
-
+        command="$1"
+        command_args="${command#* }"
 
         if [ "$1" == "close" ]; then
             LOG "Closing Session..."
@@ -376,8 +380,6 @@ execute_command() {
             return
         fi
 
-        command="$1"
-        command_args="${command#* }"
         if [[ "$command" == "download"* && -n "$command_args" ]]; then
             LOG "Download Command Received"
             echo "Received 'download' command with file path: $command_args"
@@ -399,6 +401,37 @@ execute_command() {
             curl -X POST -H "Authorization: Bot $token" -H "Content-Type: application/json" -d "$json_payload" "https://discord.com/api/v10/channels/$chan/messages"
             return
         fi
+
+        if [[ "$command" == "readme"* && -n "$command_args" ]]; then
+            LOG "Readme Command Received"
+            readme_result=$(cat -- "$command_args" 2>&1)
+            if [ -n "$readme_result" ]; then
+                temp_file=$(mktemp)
+                echo "$readme_result" > "$temp_file"
+                accumulated_lines=""
+                while IFS= read -r line; do
+                    if [ $((${#accumulated_lines} + ${#line})) -gt 1900 ]; then
+                        json_payload=$(jq -n --arg content "$accumulated_lines" '{content: $content}')
+                        curl -s -X POST -H "Authorization: Bot $token" -H "Content-Type: application/json" -d "$json_payload" "https://discord.com/api/v10/channels/$chan/messages"
+                        accumulated_lines="$line"
+                        sleep 1
+                    else
+                        accumulated_lines+=$'\n'"$line"
+                    fi
+                done < "$temp_file"
+    
+                if [ -n "$accumulated_lines" ]; then
+                    json_payload=$(jq -n --arg content "$accumulated_lines" '{content: $content}')
+                    curl -X POST -H "Authorization: Bot $token" -H "Content-Type: application/json" -d "$json_payload" "https://discord.com/api/v10/channels/$chan/messages"
+                fi
+                rm "$temp_file"
+            fi
+            return
+        else
+            error_message=$(echo "$readme_result" | tr -d '\n' | sed 's/"/\\"/g')
+            json_payload="{\"content\": \"\`\`\` [ERROR] $readme_result\`\`\`\"}"
+            curl -X POST -H "Authorization: Bot $token" -H "Content-Type: application/json" -d "$json_payload" "https://discord.com/api/v10/channels/$chan/messages"           
+        fi        
         
         if [ $? -eq 0 ]; then
             if [ -n "$command_result" ]; then
@@ -412,7 +445,7 @@ execute_command() {
                         json_payload="{\"content\": \"\`\`\`$accumulated_lines\`\`\`\"}"
                         curl -X POST -H "Authorization: Bot $token" -H "Content-Type: application/json" -d "$json_payload" "https://discord.com/api/v10/channels/$chan/messages"
                         accumulated_lines="$sanitized_line"
-                        Sleep 1
+                        sleep 1
                     else
                         accumulated_lines="$accumulated_lines\n$sanitized_line"
                     fi
@@ -464,6 +497,7 @@ while true; do
 done
 }
 
+
 LOG blue "4 : Starting Connection..."
 
 authenticated=0
@@ -507,16 +541,44 @@ json_payload="{
 
 else
 
-json_payload="{
-  \"content\": \"\",
-  \"embeds\": [
-    {
-      \"title\": \":hourglass: Session Waiting :hourglass:\",
-      \"description\": \"**Enter Your Session Code** \n-# Displayed on your WiFi Pineapple Pager\",
-      \"color\": 16776960
-    }
-  ]
-}"
+    bgresp=$(CONFIRMATION_DIALOG "Run Pagecord in backgound?")
+    case $? in
+        $DUCKYSCRIPT_REJECTED)
+            LOG "Dialog rejected"
+            exit 1
+            ;;
+        $DUCKYSCRIPT_ERROR)
+            LOG "An error occurred"
+            exit 1
+            ;;
+    esac
+    case "$bgresp" in
+        $DUCKYSCRIPT_USER_CONFIRMED)
+            LOG green "Background Session Starting.."
+            echo "Background Session Starting.."
+            Background_Session
+            return
+            ;;
+    
+        $DUCKYSCRIPT_USER_DENIED)
+            LOG green "Background prompt rejected."
+            ;;
+        *)
+        LOG "Unknown response: $bgresp"
+        exit 1
+        ;;
+    esac
+    
+    json_payload="{
+      \"content\": \"\",
+      \"embeds\": [
+        {
+          \"title\": \":hourglass: Session Waiting :hourglass:\",
+          \"description\": \"**Enter Your Session Code** \n-# Displayed on your WiFi Pineapple Pager\",
+          \"color\": 16776960
+        }
+      ]
+    }"
 
     random_letters=$(generate_random_letters)
     password="${password}${random_letters}"
@@ -530,20 +592,12 @@ json_payload="{
 fi
 
 
-
 # Send Discord message and get status
-HTTP_STATUS=$(curl -s -o /tmp/pagecord_response.json -w "%{http_code}" \
-  -X POST \
-  -H "Authorization: Bot $token" \
-  -H "Content-Type: application/json" \
-  -d "$json_payload" \
-  "https://discord.com/api/v10/channels/$chan/messages")
-
+HTTP_STATUS=$(curl -s -o /tmp/pagecord_response.json -w "%{http_code}" -X POST -H "Authorization: Bot $token" -H "Content-Type: application/json" -d "$json_payload" "https://discord.com/api/v10/channels/$chan/messages")
 if [[ $? -ne 0 ]]; then
     LOG red "curl command failed to execute."
     exit 1
 fi
-
 if [[ "$HTTP_STATUS" -ne 200 && "$HTTP_STATUS" -ne 201 ]]; then
     LOG red "Discord connection failed (HTTP $HTTP_STATUS)"
     LOG yellow "Are your bot credentials correct?"
