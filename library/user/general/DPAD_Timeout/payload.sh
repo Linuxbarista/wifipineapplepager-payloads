@@ -34,9 +34,18 @@ EOF
 
 DIM_BRIGHTNESS=$(uci get system.@pager[0].dim_brightness 2>/dev/null || echo 6)
 LCD_BRIGHTNESS="/sys/class/backlight/backlight_pwm/brightness"
+LED_B="/sys/class/leds/b-button-led/brightness"
 
 get_led_color() {
     uci get system.@pager[0].led_color 2>/dev/null || echo "cyan"
+}
+
+led_b_on() {
+    echo 1 > "$LED_B" 2>/dev/null
+}
+
+led_b_off() {
+    echo 0 > "$LED_B" 2>/dev/null
 }
 
 control_led() {
@@ -44,6 +53,7 @@ control_led() {
     local last_brightness=-1
     
     DPADLED "$(get_led_color)" 2>/dev/null
+    led_b_on
     led_state="on"
     
     while true; do
@@ -54,11 +64,13 @@ control_led() {
                 if [ $current_brightness -gt $DIM_BRIGHTNESS ]; then
                     if [ "$led_state" != "on" ]; then
                         DPADLED "$(get_led_color)" 2>/dev/null
+                        led_b_on
                         led_state="on"
                     fi
                 else
                     if [ "$led_state" != "off" ]; then
                         DPADLED off 2>/dev/null
+                        led_b_off
                         led_state="off"
                     fi
                 fi
@@ -99,6 +111,7 @@ uninstall_service() {
     # Restore LED to default
     LED_COLOR=$(uci get system.@pager[0].led_color 2>/dev/null || echo "cyan")
     DPADLED "$LED_COLOR" 2>/dev/null
+    echo 1 > /sys/class/leds/b-button-led/brightness 2>/dev/null
 
     LED FINISH
     LOG "DPAD Timeout service uninstalled!"
