@@ -4553,7 +4553,13 @@
         btn.classList.add('stop');
       } else {
         if (svg) svg.setAttribute('d', 'M8 5v14l11-7z');
-        if (txt) txt.textContent = selected && selected.isGithub ? 'Run from GitHub' : 'Run Payload';
+        let label = 'Run Payload';
+        if (currentResource === 'ringtones') {
+          label = selected && selected.isGithub ? 'Play from GitHub' : 'Play Ringtone';
+        } else if (selected && selected.isGithub) {
+          label = 'Run from GitHub';
+        }
+        if (txt) txt.textContent = label;
         btn.classList.remove('stop');
       }
     }

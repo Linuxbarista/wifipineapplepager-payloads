@@ -2,6 +2,13 @@
 
 All notable changes to Nautilus will be documented in this file.
 
+## [1.8.3] - 2026-01-30
+
+### Added
+
+- **Play Ringtone**: Button changes to "Play Ringtone" for ringtones resource type
+- **Ringtone Execution**: Executes `RINGTONE <path>` command for `.rtttl` files from Local, Merged, and PRs
+
 ## [1.8.2] - 2026-01-30
 
 ### Fixed

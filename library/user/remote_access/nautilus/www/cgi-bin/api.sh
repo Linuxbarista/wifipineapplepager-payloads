@@ -524,7 +524,18 @@ WAIT_FOR_BUTTON_PRESS() {
 export -f LOG ALERT ERROR_DIALOG LED CONFIRMATION_DIALOG PROMPT TEXT_PICKER NUMBER_PICKER IP_PICKER MAC_PICKER SPINNER SPINNER_STOP START_SPINNER STOP_SPINNER WAIT_FOR_INPUT WAIT_FOR_BUTTON_PRESS _nautilus_emit _wait_response
 
 cd "$(dirname "$1")"
-source "$1"
+
+# Handle different file types
+case "$1" in
+    *.rtttl)
+        LOG "cyan" "Playing ringtone: $(basename "$1" .rtttl)"
+        RINGTONE "$1"
+        LOG "green" "Ringtone finished"
+        ;;
+    *)
+        source "$1"
+        ;;
+esac
 WRAPPER_EOF
     chmod +x "$WRAPPER"
 
@@ -1437,10 +1448,12 @@ run_github() {
     case "$github_url" in
         https://raw.githubusercontent.com/*/wifipineapplepager-payloads/*/payload.sh)
             ;;
+        https://raw.githubusercontent.com/*/wifipineapplepager-ringtones/*/*.rtttl)
+            ;;
         *)
             echo "Content-Type: text/plain"
             echo ""
-            echo "Security: Only wifipineapplepager-payloads repos allowed"
+            echo "Security: Only allowed repos: wifipineapplepager-payloads, wifipineapplepager-ringtones"
             exit 1
             ;;
     esac
@@ -1598,17 +1611,28 @@ run_github() {
 
     sse_msg "cyan" "[GitHub] Download complete: $download_count files, $download_errors errors"
 
-    GITHUB_PAYLOAD="$GITHUB_DIR/payload.sh"
+    # Determine the target file based on URL type
+    case "$github_url" in
+        *.rtttl)
+            rtttl_file=$(basename "$github_url")
+            GITHUB_TARGET="$GITHUB_DIR/$rtttl_file"
+            target_type="ringtone"
+            ;;
+        *)
+            GITHUB_TARGET="$GITHUB_DIR/payload.sh"
+            target_type="payload"
+            ;;
+    esac
 
-    if [ ! -f "$GITHUB_PAYLOAD" ]; then
-        sse_msg "red" "[GitHub] payload.sh not found in downloaded files"
+    if [ ! -f "$GITHUB_TARGET" ]; then
+        sse_msg "red" "[GitHub] $target_type file not found in downloaded files"
         printf 'event: done\ndata: {"status":"error"}\n\n'
         rm -rf "$GITHUB_DIR"
         exit 1
     fi
-    chmod +x "$GITHUB_PAYLOAD"
+    [ "$target_type" = "payload" ] && chmod +x "$GITHUB_TARGET"
 
-    sse_msg "cyan" "[GitHub] Starting payload execution..."
+    sse_msg "cyan" "[GitHub] Starting $target_type execution..."
 
     WRAPPER="/tmp/nautilus_wrapper_$$.sh"
     cat > "$WRAPPER" << 'WRAPPER_EOF'
@@ -1752,10 +1776,21 @@ export -f CONFIRMATION_DIALOG TEXT_PICKER NUMBER_PICKER IP_PICKER MAC_PICKER PRO
 export -f WAIT_FOR_INPUT WAIT_FOR_BUTTON_PRESS
 export -f _nautilus_emit _wait_response
 
-echo "[cyan] [GitHub] Running payload..."
 cd "$(dirname "$1")"
-source "$1"
-echo "[green] [GitHub] Payload complete"
+
+# Handle different file types
+case "$1" in
+    *.rtttl)
+        echo "[cyan] [GitHub] Playing ringtone: $(basename "$1" .rtttl)"
+        RINGTONE "$1"
+        echo "[green] [GitHub] Ringtone finished"
+        ;;
+    *)
+        echo "[cyan] [GitHub] Running payload..."
+        source "$1"
+        echo "[green] [GitHub] Payload complete"
+        ;;
+esac
 WRAPPER_EOF
 
     chmod +x "$WRAPPER"
@@ -1764,7 +1799,7 @@ WRAPPER_EOF
     rm -f "$LOG_FILE"
     touch "$LOG_FILE"
 
-    /bin/bash "$WRAPPER" "$GITHUB_PAYLOAD" >> "$LOG_FILE" 2>&1 &
+    /bin/bash "$WRAPPER" "$GITHUB_TARGET" >> "$LOG_FILE" 2>&1 &
 
     echo $! > "$PID_FILE"
 
