@@ -70,6 +70,8 @@ download   - Send a file to Discord [download path/to/file.txt]
 upload     - Upload file to Pager [attach to 'upload' command]
 
 readme     - Show a readme file in markdown format [readme path/to/README.md]
+
+payloads   - List all user payloads along with their descriptions
 ```
 
 **OR You can just use the channel as a basic shell**
