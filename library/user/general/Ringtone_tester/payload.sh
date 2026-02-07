@@ -34,6 +34,7 @@ ringtone_count=0
 
 # Check if directory exists
 if [ ! -d "$RINGTONE_DIR" ]; then
+	STOP_SPINNER ${spinnerid}
 	LOG red "Error: ringtone directory not found: $RINGTONE_DIR"
 	LOG yellow "Download at
 	https://github.com/hak5/wifipineapplepager-ringtones/tree/master"
